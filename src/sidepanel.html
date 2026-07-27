@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>摘要与笔记</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <header>
+      <div class="title-row">
+        <span id="title" class="title">（未加载页面）</span>
+        <button id="settings" class="icon-btn" title="设置">⚙</button>
+      </div>
+      <a id="url" class="url" target="_blank" rel="noopener"></a>
+    </header>
+
+    <main>
+      <button id="generate" class="primary">生成摘要与关键字</button>
+
+      <section>
+        <label for="summary">摘要</label>
+        <textarea
+          id="summary"
+          rows="4"
+          placeholder="点击上方按钮生成，可手动修改…"
+        ></textarea>
+      </section>
+
+      <section>
+        <label>关键字</label>
+        <div id="keywords" class="chips">
+          <input
+            id="keyword-input"
+            class="chip-input"
+            placeholder="+ 添加关键字，回车确认"
+          />
+        </div>
+      </section>
+
+      <section>
+        <label for="content">原文</label>
+        <textarea
+          id="content"
+          rows="4"
+          placeholder="自动抓取的页面内容…"
+          readonly
+        ></textarea>
+      </section>
+
+      <section>
+        <label for="notes">感想</label>
+        <textarea
+          id="notes"
+          rows="4"
+          placeholder="写下你的阅读感想…"
+        ></textarea>
+      </section>
+
+      <button id="save" class="save">保存到飞书</button>
+      <p id="status" class="status"></p>
+    </main>
+
+    <script src="sidepanel.js"></script>
+  </body>
+</html>

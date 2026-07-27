@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+
+# node (if any)
+node_modules/
+
+# test shots
+test/shots/
+
+# OS
+Thumbs.db
+*.swp
+*.swo
+
+# Private / local config
+.env
+.env.local

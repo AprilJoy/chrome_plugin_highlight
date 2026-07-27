@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>设置 · 摘要与笔记收集器</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>设置</h1>
+
+      <section class="card">
+        <h2>LLM 配置</h2>
+        <div class="field">
+          <label for="provider">厂商</label>
+          <select id="provider"></select>
+        </div>
+        <div class="field">
+          <label for="apiKey">API Key</label>
+          <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off" />
+        </div>
+        <div class="field">
+          <label for="model">模型 <span class="hint">留空用默认，可手动填</span></label>
+          <input
+            id="model"
+            type="text"
+            list="model-suggestions"
+            placeholder="留空用默认，或填具体 model id"
+            autocomplete="off"
+          />
+          <datalist id="model-suggestions"></datalist>
+        </div>
+        <button id="testLlm" class="ghost">测试连接</button>
+        <p id="testLlmResult" class="result"></p>
+        <p class="tip">
+          支持切换 DeepSeek / 智谱 GLM / 通义千问，API Key 仅存在本地。
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>飞书多维表格</h2>
+        <div class="field">
+          <label for="appId">App ID</label>
+          <input id="appId" type="text" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label for="appSecret">App Secret</label>
+          <input id="appSecret" type="password" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label for="appToken">多维表格 App Token</label>
+          <input id="appToken" type="text" placeholder="表格 URL 中 /apps/<token>" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label for="tableId">Table ID</label>
+          <input id="tableId" type="text" placeholder="表格 URL 中 /tables/<id>" autocomplete="off" />
+        </div>
+        <button id="test" class="ghost">测试连接</button>
+        <p id="testResult" class="result"></p>
+        <p class="tip">
+          表中需建列：标题、URL、摘要、关键字、感想、时间戳。
+        </p>
+      </section>
+
+      <div class="actions">
+        <button id="save" class="primary">保存设置</button>
+        <span id="saveResult" class="result"></span>
+      </div>
+    </div>
+    <script src="options.js"></script>
+  </body>
+</html>
