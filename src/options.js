@@ -47,6 +47,7 @@ async function load() {
   $("appSecret").value = config.feishu.appSecret || "";
   $("appToken").value = config.feishu.appToken || "";
   $("tableId").value = config.feishu.tableId || "";
+  $("supadataKey").value = config.supadata?.apiKey || "";
 
   renderModelOptions(config.llm.model || "");
   providerSel.addEventListener("change", () => renderModelOptions(""));
@@ -79,6 +80,7 @@ function gather() {
       appToken: $("appToken").value.trim(),
       tableId: $("tableId").value.trim(),
     },
+    supadata: { apiKey: $("supadataKey").value.trim() },
   };
 }
 

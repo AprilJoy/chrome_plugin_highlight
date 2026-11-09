@@ -39,6 +39,15 @@
       </section>
 
       <section class="card">
+        <h2>可选字幕后备</h2>
+        <div class="field">
+          <label for="supadataKey">Supadata API Key</label>
+          <input id="supadataKey" type="password" autocomplete="off" placeholder="可留空" />
+        </div>
+        <p class="tip">YouTube 无法直接读取字幕、X 纯视频帖子需要已有字幕时使用。仅请求原生字幕，不自动转录；B 站不使用此服务。</p>
+      </section>
+
+      <section class="card">
         <h2>飞书多维表格</h2>
         <div class="field">
           <label for="appId">App ID</label>
@@ -59,7 +68,7 @@
         <button id="test" class="ghost">测试连接</button>
         <p id="testResult" class="result"></p>
         <p class="tip">
-          表中需建列：标题、URL、摘要、关键字、感想、时间戳。
+          表中需建列：标题、URL、类型、摘要、关键字、原文、感想、时间戳。
         </p>
       </section>
 
