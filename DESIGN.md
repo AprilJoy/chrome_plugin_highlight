@@ -1,5 +1,16 @@
 # Chrome 插件：网页摘要与笔记收集器 — 产品设计文档
 
+## 多来源扩展（2026-09-26）
+
+在原有网页摘要与飞书 8 列记录上加入 YouTube、X 与 B 站。`src/lib/content.js` 将来源、标题、URL、语言、字幕种类与带毫秒时间轴的 `segments` 统一；X 纯文字帖子使用 `transcriptKind: "text"`，显示与保存时不加虚假时间戳。后台按当前 URL 选择适配器，再交同一 LLM 摘要流程。视频原文上限为 80,000 字，按 5,000 字切块并归并摘要；普通网页仍沿用 4,000 字提取限制。
+
+- YouTube：点击生成时读取当前播放器响应并核对视频 ID，再取已有 JSON3 字幕；可选 Supadata `mode=native` 后备。
+- X：仅取当前帖正文；纯视频帖可选 Supadata 原生字幕，受保护或无字幕时明确失败。
+- B 站：当前 BV 与分 P 查 `/x/player/v2`，需要时查 `/x/v2/subtitle/web/view` Protobuf 轨道，再下载已有字幕 JSON；中文人工优先于中文 AI。使用浏览器会话，不读 Cookie 字符串，不下载媒体或转录。
+- 侧栏保存生成结果的原始 URL、标题、类型和文本；只有标签或 URL 变化才清稿，标题变化保留编辑。飞书新增的类型值为「视频」「帖子」，仍使用原 8 列。
+
+详细验收、风险与验证命令见根目录 `PLAN.md`。
+
 ## 背景与目标
 
 把"读网页 → 摘要 → 记笔记 → 归档"这一串动作在一个浏览器面板里完成。点开任意网页，插件用 LLM 生成约 100 字的**子弹笔记式摘要**和最多 **3 个关键字**，用户可手动增删关键字、填写阅读感想，一键把记录写入飞书多维表格（Bitable）。飞书表即唯一存储。同时支持**右键菜单快速保存**：选中网页中的任意段落，右键点击"保存为段落"，弹出对话框输入想法后直接保存。
@@ -30,11 +41,14 @@ chrome_plugin_highlight/
 │   ├── options.html / .css / .js        # 设置页
 │   ├── quote-dialog.html / .js          # 右键菜单段落保存对话框
 │   └── lib/
-│       ├── extract.js                   # 页面正文提取 → Markdown 格式
-│       ├── llm.js                       # 多厂商 LLM 适配（含模型字段可自由输入）
+│       ├── extract.js / content.js      # 网页正文与统一内容结构
+│       ├── youtube.js / bilibili.js     # 已有视频字幕适配
+│       ├── x.js / supadata.js           # 帖子正文与可选原生字幕后备
+│       ├── llm.js                       # 多厂商 LLM 及长内容分块归纳
 │       └── feishu.js                    # 飞书 Bitable 接入（含字段模糊匹配）
 ├── icons/                               # 16 / 48 / 128
 ├── test/
+│   ├── *.test.mjs                       # 协议、内容、后台和摘要测试
 │   └── e2e.mjs                          # Playwright 回归脚本
 ├── DESIGN.md                            # 产品设计文档
 └── README.md                            # 安装与使用文档
@@ -70,11 +84,11 @@ chrome_plugin_highlight/
 - 统一 prompt：要求返回 JSON `{summary, keywords}`，`response_format: json_object`（400 错误时降级重试）。
 
 #### 摘要生成规则
-1. **先判断文章类型**（评论型 / 操作性）
+1. **先判断内容类型**（观点评论 / 操作教程 / 叙述介绍）
 2. **主体**用子弹笔记呈现：层级化要点，一级前缀 `• `、二级 `  ◦ `、三级 `    — `，靠缩进体现从属关系；主体总字数 ~100 字
 3. **末尾收尾句**：
-   - 评论型（观点/评价/论述）→ 加一行 `■ 总结：` + 一句总结概括
-   - 操作性（教程/指南/步骤/实操）→ 加一行 `■ 建议：` + 一句可行性建议与执行方向
+   - 观点评论或叙述介绍 → 加一行 `■ 总结：` + 一句总结概括
+   - 操作教程 → 加一行 `■ 建议：` + 一句可行性建议与执行方向
 4. 关键字数组**最多 3 个**（prompt 要求 + 代码 `slice(0, 3)` 硬截断双保险）
 
 #### 测试连通
@@ -97,10 +111,11 @@ chrome_plugin_highlight/
 - 用户在 options 页配置：`app_id`, `app_secret`, `app_token`, `table_id`
 - 鉴权：app_id + app_secret 换 `tenant_access_token`，缓存到 `chrome.storage.local`（带过期提前 60 秒刷新，鉴权失败自动清缓存重试一次）
 - 字段映射（`FEISHU_FIELD_KEYS`）：标题、URL、**类型**、摘要、关键字、**原文**、感想、时间戳
-- **类型**字段：支持 `"文章"` 和 `"段落"` 两种：
-  - 通过 side panel 生成摘要后保存 → `type: "文章"`
+- **类型**字段：支持 `"文章"`、`"段落"`、`"视频"`、`"帖子"`：
+- 通过 side panel 生成网页摘要后保存 → `type: "文章"`
   - 通过右键菜单快速保存 → `type: "段落"`
-- **原文**字段：Markdown 格式的页面正文内容
+  - YouTube / B 站字幕摘要 → `type: "视频"`；X 帖子 → `type: "帖子"`
+- **原文**字段：网页正文、带时间戳的视频字幕或帖子正文
 - 关键字：数组 join `"; "`
 - 时间戳：本地时区 `YYYY-MM-DD HH:MM:SS`
 
@@ -113,6 +128,7 @@ chrome_plugin_highlight/
 ### 6. 设置页（options.html）
 - LLM：厂商下拉 + API Key + 模型可自由输入（带 datalist 建议项）
 - 飞书：app_id/app_secret/app_token/table_id + 「测试连接」按钮
+- 可选 Supadata API Key：只用于请求已有字幕，固定 `mode=native`
 - 「测试连接」按钮并存于 LLM 卡片和飞书卡片，分别验证 API Key 与飞书表格
 - 全部存 `chrome.storage.local`
 
@@ -128,19 +144,9 @@ chrome_plugin_highlight/
 
 ## Playwright 回归测试
 
-`test/e2e.mjs`：启动 playwright 自带 chromium（不用系统 Chrome channel），加载未打包扩展，跑 9 项断言：
+`test/e2e.mjs`：加载未打包扩展，验证配置保存、侧栏状态、YouTube/X/B 站模拟页面的提取与摘要、切页清稿及错误提示。`HEADLESS=1` 使用 Playwright 自带 Chromium；有界面运行可用本机 Chrome。另用 `node --test test/*.test.mjs` 验证内容结构、平台解析、长文归纳和后台路由。
 
-1. 扩展加载（拿到 service worker）
-2. options：LLM / 飞书测试按钮存在
-3. options：厂商下拉含智谱
-4. options：保存成功提示
-5. storage：config.llm.apiKey 已写入
-6. side panel：配 key 后生成按钮可用
-7. side panel：飞书未配时保存按钮禁用
-8. side panel：假 key 下生成返回错误提示
-9. 全部通过
-
-> 局限：自动化里模拟不了「点图标打开 side panel」授予 activeTab，抓正文 + LLM 真链路留真实环境。
+> 局限：模拟页面和假 API 无法证明真实账号下的字幕接口、LLM 与飞书可用；仍需在已登录平台和真实凭据下手工验证。
 
 ## 验证方式（端到端）
 
@@ -158,10 +164,10 @@ chrome_plugin_highlight/
 | ------ | -------- | ----------------------------- |
 | 标题   | 多行文本 | 网页标题                      |
 | URL    | 多行文本 | 网页地址                      |
-| 类型   | 多行文本 | 文章 / 段落                   |
+| 类型   | 多行文本 | 文章 / 段落 / 视频 / 帖子      |
 | 摘要   | 多行文本 | 子弹笔记形式，约 100 字       |
 | 关键字 | 多行文本 | 分号连接，最多 3 个           |
-| 原文   | 多行文本 | 页面正文（Markdown 格式）     |
+| 原文   | 多行文本 | 网页正文 / 视频字幕 / 帖子正文 |
 | 感想   | 多行文本 | 用户填写的阅读感想或想法      |
 | 时间戳 | 多行文本 | 本地时间 `YYYY-MM-DD HH:MM:SS` |
 
@@ -174,8 +180,9 @@ chrome_plugin_highlight/
 - 飞书未配置时面板禁用保存按钮并提示去设置页配置
 - 正文提取用轻量自有实现（`lib/extract.js`），**支持 Markdown 转换**，避免引入 npm/构建链
 - 「类型」字段：
-  - 通过 side panel 生成摘要后保存 → `type: "文章"`
+  - 通过 side panel 生成网页摘要后保存 → `type: "文章"`
   - 通过右键菜单快速保存 → `type: "段落"`
+  - YouTube / B 站字幕摘要 → `type: "视频"`；X 帖子摘要 → `type: "帖子"`
 - 右键菜单：只在有选中文本时显示「保存为段落」，点击后自动打开对话框（window.open popup）
 - 对话框（quote-dialog）通过 `chrome.storage.session` 传递数据，避免多窗口间的全局状态混乱
 - **飞书个人版（含「个人企业」版）不支持应用作为多维表格协作者**——必须使用企业版（团队租户），详见 README

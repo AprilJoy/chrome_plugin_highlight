@@ -1,11 +1,12 @@
 
 # 网页摘要与笔记收集器（Chrome 扩展）
 
-点开任意网页，用 LLM 生成 **子弹笔记形式**的 ~100 字摘要和最多 **3 个关键字**，可手动增删关键字、写阅读感想，一键把记录写入飞书多维表格（Bitable）。飞书表即唯一存储。还可以右键选中网页中的任意段落，直接保存为"段落"类型，并附加你的想法。
+点开网页、YouTube 视频、X 帖子或 B 站视频，用 LLM 生成 **子弹笔记形式**的 ~100 字摘要和最多 **3 个关键字**，可手动增删关键字、写阅读感想，一键把记录写入飞书多维表格（Bitable）。飞书表即唯一存储。还可以右键选中网页中的任意段落，直接保存为"段落"类型，并附加你的想法。
 
 ## 功能特性
 
 - 📄 抓取当前页面 URL + 标题 + 正文（轻量去噪提取，支持 Markdown 格式）
+- 🎬 YouTube、B 站取已有字幕，保留时间戳并对长字幕分块归纳；X 取当前帖子正文
 - 🪄 LLM 生成**子弹笔记式摘要**（一级 `•`、二级 `◦`、三级 `—`）+ 最多 3 个关键字
 - 📝 关键字可手动增删、感想自由填写
 - 💾 一键保存到飞书多维表格
@@ -72,10 +73,10 @@ API Key 仅存本地 `chrome.storage.local`，不上传任何服务器。
 | ------ | -------- | ------------------------------- |
 | 标题   | 多行文本 | 网页标题                        |
 | URL    | 多行文本 | 网页地址                        |
-| 类型   | 多行文本 | 文章 / 段落                     |
+| 类型   | 多行文本 | 文章 / 段落 / 视频 / 帖子        |
 | 摘要   | 多行文本 | 子弹笔记形式，约 100 字         |
 | 关键字 | 多行文本 | 分号连接，最多 3 个             |
-| 原文   | 多行文本 | 页面正文（Markdown 格式）       |
+| 原文   | 多行文本 | 网页正文 / 带时间戳的字幕 / 帖子正文 |
 | 感想   | 多行文本 | 用户填写的阅读感想              |
 | 时间戳 | 多行文本 | 本地时间`YYYY-MM-DD HH:MM:SS` |
 
@@ -102,6 +103,16 @@ https://my.feishu.cn/base/YC17bwgCMaCGUfsWgbNcWTuan0f?table=tbloU6RyH1wRkvHj&vie
 填进扩展设置页 → 点「**测试连接**」→ 提示「字段齐全 ✓」即完成。
 
 ## 使用
+
+### 视频和 X 帖子
+
+1. 打开 YouTube 视频（含 watch、Shorts、live、embed 页面）、X 帖子或 B 站视频页。B 站如需登录字幕，请先在浏览器登录，并确认播放器字幕菜单中已有字幕。
+2. 打开侧栏，点「生成摘要与关键字」。来源行会显示平台、字幕种类和语言；「原文 / 字幕」可检查抓取内容。B 站多 P 视频按当前 URL 的 `p` 参数选择分 P。
+3. 编辑摘要和关键字，按原来的方式保存到飞书。视频记录类型为「视频」，X 文字帖子为「帖子」，无需新增飞书列。
+
+默认不需要 Supadata Key：YouTube 直接读取当前播放器的已有字幕，X 读取当前帖子正文。设置页可选填 Supadata API Key，供 YouTube 字幕读取失败或 X 纯视频帖取已有字幕时使用；请求固定为 `mode=native`，不会启动 AI 转录。B 站只走已登录浏览器可访问的字幕接口，不下载视频或音频，不调用 Whisper；没有可用字幕会明确报错。X 的回复、推荐帖、受保护内容不会混入当前帖摘要。
+
+字幕接口和播放器页面结构可能变化。YouTube 当前播放器无法读取、X 纯视频无原生字幕、B 站登录态或风控阻断时，侧栏会提示原因。长字幕完整归纳的可读文本上限为 80,000 字；超过会报错，不会静默只总结开头。每个长视频可能产生多次 LLM 调用。
 
 ### 方式 1：生成摘要（完整流程）
 
@@ -176,6 +187,9 @@ chrome_plugin_highlight/
 │   ├── background.js                    # service worker：消息路由 + 编排
 │   ├── lib/
 │   │   ├── extract.js                   # 页面正文提取 → Markdown 格式
+│   │   ├── content.js                   # 统一内容结构、来源识别和长文本切块
+│   │   ├── youtube.js / bilibili.js     # 视频字幕适配
+│   │   ├── x.js / supadata.js           # X 帖子与可选字幕后备
 │   │   ├── llm.js                       # 多厂商 LLM 适配（含模型字段可自由输入）
 │   │   └── feishu.js                    # 飞书 Bitable 接入（含字段模糊匹配）
 │   ├── sidepanel.html/.css/.js          # 侧边栏主界面
@@ -184,6 +198,10 @@ chrome_plugin_highlight/
 │   └── sidepanel.css                    # 侧边栏样式
 ├── icons/                               # 16 / 48 / 128 占位图标
 ├── test/
+│   ├── content.test.mjs                 # 统一内容与长度边界
+│   ├── platforms.test.mjs               # 字幕、帖子和平台接口
+│   ├── llm-summary.test.mjs             # 长内容归纳
+│   ├── background.test.mjs              # 后台路由
 │   └── e2e.mjs                          # Playwright 回归脚本
 ├── DESIGN.md                            # 产品设计文档
 └── README.md                            # 本文档
@@ -191,17 +209,21 @@ chrome_plugin_highlight/
 
 ## 开发与回归测试
 
-`test/e2e.mjs` 是 Playwright 端到端冒烟测试，覆盖扩展加载、options/side panel UI、配置保存、按钮状态联动、错误路径。改完代码后跑：
+`test/*.test.mjs` 是不依赖外部账号的协议和流程测试；`test/e2e.mjs` 是 Playwright 扩展冒烟测试，覆盖扩展加载、options/side panel UI、配置保存、按钮状态联动、错误路径。改完代码后跑：
 
 ```bash
+node --test test/*.test.mjs
 node test/e2e.mjs
 ```
+
+无图形界面时可用 `HEADLESS=1 node test/e2e.mjs`，它会启动完整 Chromium 并用模拟页面验证 YouTube、X、B 站的提取与摘要编排。
 
 > 自动化模拟不了「点图标打开 side panel」授予 activeTab，抓正文 + LLM 真链路留真实环境验证。
 
 ## 数据安全
 
-- API Key 与飞书凭据仅存在本地 `chrome.storage.local`，不上传任何第三方服务器
+- API Key 与飞书凭据仅存在本地 `chrome.storage.local`；调用时仅发送给对应的 LLM、Supadata（若配置）或飞书服务
+- B 站请求沿用当前浏览器会话，不读取或保存 Cookie 字符串；字幕下载地址不保存在配置中
 - LLM 请求由浏览器直连对应厂商，飞书写入直连飞书开放平台
 - 不依赖任何后端服务，单文件即可分发
 
